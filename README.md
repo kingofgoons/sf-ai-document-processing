@@ -7,7 +7,8 @@ End-to-end demo of automated document intelligence using Snowflake Cortex AI fun
 | Cortex AI Function | Purpose |
 |---|---|
 | `AI_PARSE_DOCUMENT` | Extract text and structure from PDFs |
-| `CORTEX.COMPLETE` | Detect document language; structured output extraction for unlimited fields (Phase 2) |
+| `AI_COMPLETE` | Structured JSON output extraction for 351 fields (Phase 2) |
+| `CORTEX.COMPLETE` | Detect document language |
 | `AI_TRANSLATE` | Translate non-English documents to English |
 | `AI_EXTRACT` | Pull structured fields from unstructured text |
 | `AI_CLASSIFY` | Categorize documents by risk level |
@@ -23,7 +24,11 @@ phase1_doc_intelligence/                 # Document Intelligence
   01_doc_intelligence.sql                # Full Cortex AI pipeline
   leases/                               # Generated PDFs (7 files)
 
-phase2_high_field_extraction_at_scale/   # High-field extraction (planned)
+phase2_high_field_extraction_at_scale/   # High-field extraction (351 fields)
+  00_generate_complex_leases.py          # Generate complex lease PDFs with 351 fields
+  01_complex_extraction.sql              # Multi-pass AI_EXTRACT + AI_COMPLETE demo
+  leases/                               # Generated PDFs (3 files)
+
 phase3_search_analytics_intelligence/    # Search + Analytics (planned)
 ```
 
@@ -31,7 +36,7 @@ phase3_search_analytics_intelligence/    # Search + Analytics (planned)
 
 - Snowflake account with Cortex AI functions enabled
 - `ACCOUNTADMIN` role access (one-time setup only)
-- Python 3.8+ with `reportlab` (for PDF generation)
+- Python 3.8+ with `reportlab` and `python-dateutil` (for PDF generation)
 - [Snow CLI](https://docs.snowflake.com/en/developer-guide/snowflake-cli/index) (optional, for stage uploads)
 
 ## Quick Start
@@ -39,7 +44,7 @@ phase3_search_analytics_intelligence/    # Search + Analytics (planned)
 ### 1. Generate Sample Leases
 
 ```bash
-pip install reportlab
+pip install reportlab python-dateutil
 python phase1_doc_intelligence/00_generate_leases.py
 ```
 
@@ -125,14 +130,30 @@ Key efficiency: each document is parsed exactly once. All downstream operations 
 
 ## Roadmap
 
-### Phase 2: High-Field Extraction at Scale
+### Phase 2: High-Field Extraction at Scale (Complete)
 
-Real commercial leases have 300+ extractable fields. `AI_EXTRACT` caps at 100 questions per call. Phase 2 demonstrates two strategies:
+Real commercial leases have 300+ extractable fields. `AI_EXTRACT` caps at 100 questions per call. Phase 2 demonstrates two strategies to handle this:
 
-- **Multi-pass `AI_EXTRACT`**: Split 351 fields into 4 batches, merge results
-- **`AI_COMPLETE` structured output**: Single call with JSON schema via `response_format`
+**Generate complex leases:**
 
-Includes a complex lease generator producing PDFs with 351 fields across 9 sections.
+```bash
+python phase2_high_field_extraction_at_scale/00_generate_complex_leases.py
+```
+
+Produces 3 complex lease PDFs with 351 extractable fields embedded in realistic legal prose across 11 articles (Parties, Premises, Term, Rent, Operating Expenses, Options, Insurance, Construction, Default, Environmental, Miscellaneous).
+
+**Upload and run extraction:**
+
+```bash
+snow stage copy phase2_high_field_extraction_at_scale/leases/*.pdf @AIML_DEMO_DB.DOC_PROCESSING.COMPLEX_LEASE_DOCUMENTS --overwrite
+```
+
+Then execute `phase2_high_field_extraction_at_scale/01_complex_extraction.sql` step by step:
+
+- **Approach A: Multi-pass AI_EXTRACT** — Splits 351 fields into 4 passes of ~88 fields each, then merges results via JOIN
+- **Approach B: AI_COMPLETE with structured output** — Uses `response_format` with JSON schema for structured extraction, batched into 4 groups to stay under the 8192 token output limit
+
+Both approaches read from `PARSED_COMPLEX_LEASES` (parse-once pattern) and produce a final table with all 351 fields as columns.
 
 ### Phase 3: Search, Analytics & Intelligence
 
