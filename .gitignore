@@ -1,0 +1,8 @@
+# Cortex Code local skills and config
+.cortex/
+
+# Draw.io diagrams
+*.drawio
+
+# macOS
+.DS_Store
