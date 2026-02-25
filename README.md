@@ -12,6 +12,11 @@ End-to-end demo of automated document intelligence using Snowflake Cortex AI fun
 | `AI_TRANSLATE` | Translate non-English documents to English |
 | `AI_EXTRACT` | Pull structured fields from unstructured text |
 | `AI_CLASSIFY` | Categorize documents by risk level |
+| `CORTEX SEARCH SERVICE` | Semantic search over lease document content (Phase 3) |
+| `SEMANTIC VIEW` | Natural-language analytics via Cortex Analyst (Phase 3) |
+| `CORTEX AGENT` | Unified intelligence combining search + analyst (Phase 3) |
+| `SEARCH_PREVIEW` | SQL-based testing of Cortex Search services (Phase 3) |
+| `DATA_AGENT_RUN` | Invoke Cortex Agent from SQL (Phase 3) |
 
 ## Project Structure
 
@@ -29,7 +34,8 @@ phase2_high_field_extraction_at_scale/   # High-field extraction (351 fields)
   01_complex_extraction.sql              # Multi-pass AI_EXTRACT + AI_COMPLETE demo
   leases/                               # Generated PDFs (3 files)
 
-phase3_search_analytics_intelligence/    # Search + Analytics (planned)
+phase3_search_analytics_intelligence/    # Search, Analytics & Intelligence
+  01_search_analytics_intelligence.sql   # Cortex Search + Semantic View + Cortex Agent
 ```
 
 ## Prerequisites
@@ -109,21 +115,29 @@ PDF files on stage
     |
     v
 AI_PARSE_DOCUMENT  -->  PARSED_LEASES table (parse once, reuse)
-    |
-    v
-CORTEX.COMPLETE    -->  Detect language (lang column)
-    |
-    v
-AI_TRANSLATE       -->  English content (en_content column)
-    |
-    v
-AI_EXTRACT         -->  Structured fields (lease_id, tenant, rent, ...)
-    |
-    v
-AI_CLASSIFY        -->  Risk level (High / Medium / Low)
-    |
-    v
-EXTRACTED_LEASE_DATA    (final analytics-ready table)
+    |                          |
+    v                          v
+CORTEX.COMPLETE         LEASE_SEARCH_CORPUS (join with metadata)
+    |                          |
+    v                          v
+AI_TRANSLATE            Cortex Search Service
+    |                          |
+    v                          |
+AI_EXTRACT                     |
+    |                          |
+    v                          |
+AI_CLASSIFY                    |
+    |                          |
+    v                          |
+EXTRACTED_LEASE_DATA           |
+    |                          |
+    v                          |
+Semantic View                  |
+    |                          |
+    +----------+---------------+
+               |
+               v
+         Cortex Agent (Snowflake Intelligence)
 ```
 
 Key efficiency: each document is parsed exactly once. All downstream operations read from `PARSED_LEASES.en_content`.
@@ -155,11 +169,28 @@ Then execute `phase2_high_field_extraction_at_scale/01_complex_extraction.sql` s
 
 Both approaches read from `PARSED_COMPLEX_LEASES` (parse-once pattern) and produce a final table with all 351 fields as columns.
 
-### Phase 3: Search, Analytics & Intelligence
+### Phase 3: Search, Analytics & Intelligence (Complete)
 
-- **Cortex Search**: Semantic search over raw lease content
-- **Semantic View**: Natural-language analytics via Cortex Analyst
-- **Snowflake Intelligence**: Unified interface connecting search + analyst
+Builds three intelligence layers on top of Phase 1 extracted data:
+
+1. **Cortex Search Service** — Semantic search over raw lease content with attribute filtering
+2. **Semantic View** — Business-semantic layer enabling natural-language analytics via Cortex Analyst
+3. **Cortex Agent** — Unified Snowflake Intelligence agent that routes questions to search or analyst
+
+**Run Phase 3:**
+
+Execute `phase3_search_analytics_intelligence/01_search_analytics_intelligence.sql` step by step:
+
+- **Step 1**: Create `LEASE_SEARCH_CORPUS` (joins `PARSED_LEASES` content with `EXTRACTED_LEASE_DATA` metadata)
+- **Step 2**: Create `LEASE_SEARCH_SERVICE` (Cortex Search over lease text, filterable by market, risk, tenant)
+- **Step 3**: Test search with `SEARCH_PREVIEW` (basic queries + filtered queries)
+- **Step 4**: Create `LEASE_ANALYTICS_VIEW` (Semantic View with 13 dimensions, 2 facts, 4 metrics)
+- **Step 5**: Test semantic view with `SEMANTIC_VIEW()` table function
+- **Step 6**: Create `LEASE_INTELLIGENCE_AGENT` (Cortex Agent with LeaseAnalytics + LeaseSearch tools)
+- **Step 7**: Verify agent with `DESCRIBE AGENT` / `SHOW AGENTS`
+- **Step 8**: Test agent with `DATA_AGENT_RUN` (analytics and search questions)
+
+The agent is also accessible in the Snowflake Intelligence UI (AI & ML > Agents).
 
 ## RBAC Model
 
